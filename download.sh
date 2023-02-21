@@ -1,3 +1,5 @@
+rm -rf files
+
 curl "https://www.icpsr.umich.edu/web/NAHDAP/series/35?start=0&sort=TITLE_SORT%20asc&SERIESQ=35&ARCHIVE=NAHDAP&rows=100" \
     | grep 'variables.searchResults' \
     | sed 's/variables.searchResults = \(.*\);/\1/g' \

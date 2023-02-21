@@ -9,7 +9,7 @@ dfs = []
 for fn in root.rglob('ICPSR_*/DS*/*.dta'):
     for col_name, var_name in pd.read_stata(fn, iterator=True).variable_labels().items():
         data_dict[col_name].append(var_name)
-    df = pd.read_stata(fn)
+    df = pd.read_stata(fn, convert_categoricals=False)
     dfs.append(df)
 
 pd.concat(dfs).to_csv("db.csv", index=False)
