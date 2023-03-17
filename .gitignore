@@ -2,4 +2,6 @@ files
 urls.txt
 files.bak
 .DS_Store
-db.csv
+*.zip
+*.csv
+*.tsv

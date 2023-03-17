@@ -22,3 +22,4 @@ The following steps will produce a `db.csv` file containing all the data from al
 * Unzip: `ls | xargs -I{} unzip {}`
 * Back to root of repo: `cd ..`
 * Merge the data: `python script.py`
+* `rm files/ICPSR_06227` (concatenated files)
