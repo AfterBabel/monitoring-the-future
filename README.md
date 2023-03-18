@@ -4,6 +4,7 @@
 
 * Install [Anaconda](https://www.anaconda.com/products/distribution)
 * `conda activate`
+* `pip install -r requirements.txt`
 
 ## Steps
 
