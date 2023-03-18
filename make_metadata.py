@@ -21,33 +21,96 @@ for dir_path in root.rglob('ICPSR_*'):
         assert match is not None
         grade, year = match.groups()
     except AssertionError:
-        print(f"{study} does not specify the grade")
+        if "12th-Grade" not in manifest:
+            print(f"{study} does not specify the grade, defaulting to 12th grade")
         grade = "12th-Grade"
         match = re.search(r",\s+(\d{4})\.\s", manifest)
         year = match.group(1)
     if "and" in grade:
-        matches = re.finditer(r"(DS\d{4}) (\d+)th-Grade Form (\d+)", manifest)
-        for match in matches:
-            dataset_name, grd, form = match.groups()
-            dataset_id = len(datasets)
-            dataset = {
-                "dataset_id": dataset_id,
-                "dataset_name": dataset_name,
-                "form": int(form),
-                "year": int(year),
-                "grade": int(grd),
-                "study": study
-            }
-            datasets.append(dataset)
-            for col_name, var_name in get_variables(study, dataset_name):
-                variable = {
+        patt1 = r"(DS\d{4}) Monitoring the Future: A Continuing Study of American Youth \(8th-\nand 10th-Grade Surveys\)"
+        patt2 = r"(DS\d{4}) Main Data File"
+        match1 = re.search(patt1, manifest)
+        match2 = re.search(patt2, manifest)
+        if match1 or match2:
+            if match1:
+                matches = re.finditer(patt1, manifest)
+            elif match2:
+                matches = re.finditer(patt2, manifest)
+            else:
+                import code; code.interact(local=locals())
+            for match in matches:
+                dataset_name = match.group(1)
+                for g in [8, 10]:
+                    dataset_id = len(datasets)
+                    dataset = {
+                        "dataset_id": dataset_id,
+                        "dataset_name": dataset_name,
+                        "form": "all",
+                        "year": int(year),
+                        "grade": g,
+                        "study": study
+                    }
+                    datasets.append(dataset)
+                    for col_name, var_name in get_variables(study, dataset_name):
+                        variable = {
+                            "dataset_id": dataset_id,
+                            "variable_name": var_name,
+                            "column_name": col_name
+                        }
+                        variables.append(variable)
+        else:
+            patt4 = r"(DS\d{4}) (\d+)th-Grade Form (\d+)"
+            patt5 = r"(DS\d{4}) (\d+)th Grade, Form (\d+)"
+            if re.search(patt4, manifest):
+                matches = list(re.finditer(patt4, manifest))
+            elif re.search(patt5, manifest):
+                matches = list(re.finditer(patt5, manifest))
+            else:
+                import code; code.interact(local=locals())
+            for match in matches:
+                dataset_name, grd, form = match.groups()
+                dataset_id = len(datasets)
+                dataset = {
                     "dataset_id": dataset_id,
-                    "variable_name": var_name,
-                    "column_name": col_name
+                    "dataset_name": dataset_name,
+                    "form": form.strip(),
+                    "year": int(year),
+                    "grade": int(grd),
+                    "study": study
                 }
-                variables.append(variable)
+                datasets.append(dataset)
+                for col_name, var_name in get_variables(study, dataset_name):
+                    variable = {
+                        "dataset_id": dataset_id,
+                        "variable_name": var_name,
+                        "column_name": col_name
+                    }
+                    variables.append(variable)
     else:
         grade = re.search(r"(\d+)th-Grade", grade).group(1)
+        patt3 = r"(DS\d{4}) Core Data"
+        match3 = re.search(patt3, manifest)
+        if match3:
+            matches = re.finditer(patt3, manifest)
+            for match in matches:
+                dataset_name = match.group(1)
+                dataset_id = len(datasets)
+                dataset = {
+                    "dataset_id": dataset_id,
+                    "dataset_name": dataset_name,
+                    "form": "core",
+                    "year": int(year),
+                    "grade": int(grade),
+                    "study": study
+                }
+                datasets.append(dataset)
+                for col_name, var_name in get_variables(study, dataset_name):
+                    variable = {
+                        "dataset_id": dataset_id,
+                        "variable_name": var_name,
+                        "column_name": col_name
+                    }
+                    variables.append(variable)
         matches = re.finditer(r"(DS\d{4}) Form (\d+)", manifest)
         for match in matches:
             dataset_name, form = match.groups()
@@ -55,7 +118,7 @@ for dir_path in root.rglob('ICPSR_*'):
             dataset = {
                 "dataset_id": dataset_id,
                 "dataset_name": dataset_name,
-                "form": int(form),
+                "form": form.strip(),
                 "year": int(year),
                 "grade": int(grade),
                 "study": study

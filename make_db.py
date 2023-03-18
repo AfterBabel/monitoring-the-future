@@ -20,8 +20,8 @@ def get_data_dict(dataset_id):
     }
     remaining_var_names = set([])
     for _, selected_variable in selected_variables.iterrows():
-        forms = list(map(int, selected_variable["form"].split(",")))
-        if datasets.loc[dataset_id]["form"] not in forms:
+        forms = list(map(lambda form: form.strip(), selected_variable["form"].split(",")))
+        if datasets.loc[dataset_id]["form"] not in (forms + ["core", "all"]):
             continue
         v = selected_variable["variable_name"]
         v = v.upper().strip()
@@ -78,12 +78,13 @@ def get_data_dict(dataset_id):
             vars[column_name] = v
 
     dataset = datasets.loc[dataset_id]
-    print(f"unmatched variables: {sorted(list(unmatched_var_names))}", "dataset={dataset_name} form={form} year={year} grade={grade} study={study}".format(**dataset.to_dict()))
+    if unmatched_var_names:
+        print(f"unmatched variables: {sorted(list(unmatched_var_names))}", "dataset={dataset_name} form={form} year={year} grade={grade} study={study}".format(**dataset.to_dict()))
     return vars
 
 root = Path('files')
 
-dfs = defaultdict(lambda: defaultdict(dict))
+dfs = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 for dataset_id, row in datasets.iterrows():
     study_id = row.study.split("_")[1]
     path = root/row.study/row.dataset_name/f"{study_id}-{row.dataset_name[2:]}-Data.dta"
@@ -95,15 +96,21 @@ for dataset_id, row in datasets.iterrows():
     data_dict = {k: data_dict[k] for k in sorted(data_dict.keys(), key=lambda k: int(k[1:]))}
     assert len(df["V1"].unique()) == 1
     assert str(int(df["V1"].iloc[0])) in str(row.year)
-    assert len(df["V3"].unique()) == 1
-    assert df["V3"].iloc[0] == row.form
-    df = df[list(data_dict.keys())] # filter columns
     df.V1 = row.year
-    df.V2 = row.form
+    df = df[list(data_dict.keys())] # filter columns
     df.rename(columns=data_dict, inplace=True)
-    dfs[row.grade][row.form][row.year] = df
+    if row.form == "core" or row.form == "all":
+        for form, g in df.groupby("FORM ID"):
+            dfs[row.grade][str(form)][row.year].append(g.reset_index(drop=True))
+    else:
+        dfs[row.grade][str(row.form)][row.year].append(df)
 
 for grade in dfs.keys():
     for form in dfs[grade].keys():
-        df = pd.concat(dfs[grade][form].values())
+        year_dfs = []
+        for year in dfs[grade][form].keys():
+            df = pd.concat(dfs[grade][form][year], axis=1)
+            df = df.loc[:,~df.columns.duplicated()].copy() # remove duplicated columns
+            year_dfs.append(df)
+        df = pd.concat(year_dfs, axis=0, ignore_index=True)
         df.to_csv(f"grade-{grade}_form-{form}.csv", index=False)
