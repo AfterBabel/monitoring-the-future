@@ -1,10 +1,16 @@
 import re
 import pandas as pd
 from pathlib import Path
-from collections import defaultdict
 
 root = Path('files')
-records = []
+
+def get_variables(study, dataset_name):
+    study_id = study.split("_")[1]
+    path = root/study/dataset_name/f"{study_id}-{dataset_name[2:]}-Data.dta"
+    yield from pd.read_stata(path, iterator=True).variable_labels().items()
+
+datasets = []
+variables = []
 for dir_path in root.rglob('ICPSR_*'):
     study = dir_path.name
     manifest_filepath = next(dir_path.rglob('*-manifest.txt'))
@@ -23,29 +29,52 @@ for dir_path in root.rglob('ICPSR_*'):
         matches = re.finditer(r"(DS\d{4}) (\d+)th-Grade Form (\d+)", manifest)
         for match in matches:
             dataset_name, grd, form = match.groups()
-            record = {
+            dataset_id = len(datasets)
+            dataset = {
+                "dataset_id": dataset_id,
                 "dataset_name": dataset_name,
                 "form": int(form),
                 "year": int(year),
                 "grade": int(grd),
                 "study": study
             }
-            records.append(record)
+            datasets.append(dataset)
+            for col_name, var_name in get_variables(study, dataset_name):
+                variable = {
+                    "dataset_id": dataset_id,
+                    "variable_name": var_name,
+                    "column_name": col_name
+                }
+                variables.append(variable)
     else:
         grade = re.search(r"(\d+)th-Grade", grade).group(1)
         matches = re.finditer(r"(DS\d{4}) Form (\d+)", manifest)
         for match in matches:
             dataset_name, form = match.groups()
-            record = {
+            dataset_id = len(datasets)
+            dataset = {
+                "dataset_id": dataset_id,
                 "dataset_name": dataset_name,
                 "form": int(form),
                 "year": int(year),
                 "grade": int(grade),
                 "study": study
             }
-            records.append(record)
+            datasets.append(dataset)
+            for col_name, var_name in get_variables(study, dataset_name):
+                variable = {
+                    "dataset_id": dataset_id,
+                    "variable_name": var_name,
+                    "column_name": col_name
+                }
+                variables.append(variable)
 
-df = pd.DataFrame.from_records(records)
-df.to_csv("metadata.tsv", sep="\t", index=False)
+
+df = pd.DataFrame.from_records(datasets, index="dataset_id")
+df.to_csv("datasets.tsv", sep="\t")
+df = pd.DataFrame.from_records(variables, index="dataset_id")
+mask = df["variable_name"] == ""
+df.loc[mask, "variable_name"] = "CASEID"
+df.to_csv("variables.tsv", sep="\t")
             
     

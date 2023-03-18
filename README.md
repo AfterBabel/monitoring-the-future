@@ -21,5 +21,10 @@ The following steps will produce a `db.csv` file containing all the data from al
 * `cd files`
 * Unzip: `ls | xargs -I{} unzip {}`
 * Back to root of repo: `cd ..`
-* Merge the data: `python script.py`
-* `rm files/ICPSR_06227` (concatenated files)
+* Make metadata: `python make_metadata.py`. This will produce two files: `datasets.tsv` and `variables.tsv`.
+* Copy-paste columns `irn`, `variable_name`, and `form` from [this spreadsheet](https://docs.google.com/spreadsheets/d/1z-RUnXtbaFWtZdznlrhjud41e6Iz74cBJaUh8nPrx8M/edit?usp=sharing) into a file named `selected_variables.tsv`
+* Make db: `python make_db.py >> log.txt`:
+    * This will produce one file per (grade, form) combination in the format `grade-{grade}_form-{form}.csv`
+    * The log produced will displays:
+        * The fuzzy matching done for certain variables
+        * The unmatched variables for certain datasets -> This may be expected as a form might be missing some variables in some years
