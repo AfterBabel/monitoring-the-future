@@ -13,9 +13,13 @@ datasets = []
 variables = []
 for dir_path in root.rglob('ICPSR_*'):
     study = dir_path.name
+    print(f"Processing {study}")
     manifest_filepath = next(dir_path.rglob('*-manifest.txt'))
     with open(manifest_filepath) as f:
         manifest = f.read()
+    if "Concatenated Core File" in manifest:
+        print("Skipping concatenated core file")
+        continue
     match = re.search(r"\(((?:\d+th\- and )?\d+th\-Grade) Surveys?\), (\d{4})", manifest)
     try:
         assert match is not None
@@ -37,7 +41,7 @@ for dir_path in root.rglob('ICPSR_*'):
             elif match2:
                 matches = re.finditer(patt2, manifest)
             else:
-                import code; code.interact(local=locals())
+                raise Exception
             for match in matches:
                 dataset_name = match.group(1)
                 for g in [8, 10]:
@@ -66,7 +70,7 @@ for dir_path in root.rglob('ICPSR_*'):
             elif re.search(patt5, manifest):
                 matches = list(re.finditer(patt5, manifest))
             else:
-                import code; code.interact(local=locals())
+                raise Exception
             for match in matches:
                 dataset_name, grd, form = match.groups()
                 dataset_id = len(datasets)

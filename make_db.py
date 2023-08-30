@@ -6,12 +6,17 @@ from Levenshtein import distance
 
 datasets = pd.read_csv("datasets.tsv", sep="\t", index_col="dataset_id")
 variables = pd.read_csv("variables.tsv", sep="\t", index_col="dataset_id")
-selected_variables = pd.read_csv("selected_variables.tsv", sep="\t", dtype={"irn": str, "form": str})
+selected_variables = pd.read_csv("selected_variables.tsv", sep="\t", dtype={"irn": str, "form (12th grade)": str, "form (8th and 10th grade)": str})
+selected_variables = selected_variables[selected_variables.keep]
+
+varname2canonical = {row["variable_name"]: row["canonical_variable_name"] for _,row in selected_variables.iterrows() }
 
 many_spaces_patt = r"\s{2,}"
 alphanum_patt = r"([A-Za-z]+[\d@]+[\w@]*|[\d@]+[A-Za-z]+[\w@]*)"
 
-def get_data_dict(dataset_id):
+POSSIBLE_GRADES = {8,10,12}
+
+def get_data_dict(dataset_id, grade):
     mask = variables.index == dataset_id
     vars = {
         "V1": "YEAR",
@@ -20,7 +25,11 @@ def get_data_dict(dataset_id):
     }
     remaining_var_names = set([])
     for _, selected_variable in selected_variables.iterrows():
-        forms = list(map(lambda form: form.strip(), selected_variable["form"].split(",")))
+        form_fieldname = "form (12th grade)" if grade == 12 else "form (8th and 10th grade)"
+        if pd.isna(selected_variable[form_fieldname]):
+            forms = []
+        else:
+            forms = list(map(lambda form: form.strip(), selected_variable[form_fieldname].split(",")))
         if datasets.loc[dataset_id]["form"] not in (forms + ["core", "all"]):
             continue
         v = selected_variable["variable_name"]
@@ -88,9 +97,15 @@ dfs = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 for dataset_id, row in datasets.iterrows():
     study_id = row.study.split("_")[1]
     path = root/row.study/row.dataset_name/f"{study_id}-{row.dataset_name[2:]}-Data.dta"
-    data_dict = get_data_dict(dataset_id)
+    data_dict = get_data_dict(dataset_id, row.grade)
     df = pd.read_stata(path, convert_categoricals=False).dropna(axis=1, how="all")
     df.V1 = df.V1.fillna(method="ffill")
+    if row.grade in [8,10] and row.form in ["all","core"]:
+        # this is a case where both grades are in the same dataset
+        assert "V501" in df.columns, "Grade column is missing"
+        unique_grades = set(df.V501.unique())
+        assert unique_grades.issubset(POSSIBLE_GRADES), f"Unknown grades: {unique_grades - POSSIBLE_GRADES}"
+        df = df[df.V501 == row.grade] # filter rows belonging to the right grade
     if "V5" not in df.columns:
         df.rename(columns={"ARCHIVE_WT": "V5"}, inplace=True)
     data_dict = {k: data_dict[k] for k in sorted(data_dict.keys(), key=lambda k: int(k[1:]))}
@@ -101,16 +116,27 @@ for dataset_id, row in datasets.iterrows():
     df.rename(columns=data_dict, inplace=True)
     if row.form == "core" or row.form == "all":
         for form, g in df.groupby("FORM ID"):
-            dfs[row.grade][str(form)][row.year].append(g.reset_index(drop=True))
+            dfs[str(form)][row.grade][row.year].append(g.reset_index(drop=True))
     else:
-        dfs[row.grade][str(row.form)][row.year].append(df)
+        dfs[str(row.form)][row.grade][row.year].append(df)
 
-for grade in dfs.keys():
-    for form in dfs[grade].keys():
+all_dfs = []
+for form in dfs.keys():
+    form_dfs = []
+    for grade in dfs[form].keys():
         year_dfs = []
-        for year in dfs[grade][form].keys():
-            df = pd.concat(dfs[grade][form][year], axis=1)
-            df = df.loc[:,~df.columns.duplicated()].copy() # remove duplicated columns
-            year_dfs.append(df)
-        df = pd.concat(year_dfs, axis=0, ignore_index=True)
-        df.to_csv(f"grade-{grade}_form-{form}.csv", index=False)
+        for year in dfs[form][grade].keys():
+            year_df = pd.concat(dfs[form][grade][year], axis=1)
+            year_df = year_df.loc[:,~year_df.columns.duplicated()].copy() # remove duplicated columns
+            year_dfs.append(year_df)
+        grade_df = pd.concat(year_dfs, axis=0, ignore_index=True)
+        # grade_df.rename(columns=varname2canonical, inplace=True)
+        grade_df.to_csv(f"grade-{grade}_form-{form}.csv", index=False)
+        grade_df["GRADE"] = grade
+        form_dfs.append(grade_df)
+    form_df = pd.concat(form_dfs, axis=0, ignore_index=True)
+    form_df.to_csv(f"all-grades_form-{form}.csv", index=False)
+    all_dfs.append(form_df)
+
+df = pd.concat(all_dfs, axis=0, ignore_index=True)
+df.to_csv(f"all-grades_all-forms.csv", index=False)
